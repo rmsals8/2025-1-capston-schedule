@@ -1,5 +1,6 @@
 package com.example.TripSpring.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,6 +15,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -57,9 +59,10 @@ public class KakaoLocalService {
             br.close();
             conn.disconnect();
 
-            // JSON 파싱
+            // JSON 파싱 - TypeReference 사용하여 정확한 타입 지정
             ObjectMapper mapper = new ObjectMapper();
-            Map<String, Object> result = mapper.readValue(responseBody.toString(), Map.class);
+            Map<String, Object> result = mapper.readValue(responseBody.toString(), 
+                    new TypeReference<Map<String, Object>>() {});
 
             // 로깅
             log.info("카카오 로컬 API 응답 상태: {}", responseCode);
@@ -82,17 +85,33 @@ public class KakaoLocalService {
         try {
             // 검색 결과 확인
             Object documentsObj = result.get("documents");
-            if (documentsObj instanceof java.util.List && !((java.util.List<?>) documentsObj).isEmpty()) {
-                Map<String, Object> firstPlace = (Map<String, Object>) ((java.util.List<?>) documentsObj).get(0);
+            if (documentsObj instanceof List<?>) {
+                List<?> documentsList = (List<?>) documentsObj;
+                
+                if (!documentsList.isEmpty()) {
+                    Object firstPlaceObj = documentsList.get(0);
+                    
+                    if (firstPlaceObj instanceof Map) {
+                        // 타입 확인 후 안전하게 캐스팅
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> firstPlace = (Map<String, Object>) firstPlaceObj;
 
-                processedResult.put("status", "SUCCESS");
-                processedResult.put("name", firstPlace.get("place_name"));
-                processedResult.put("address", firstPlace.get("address_name"));
-                processedResult.put("roadAddress", firstPlace.get("road_address_name"));
-                processedResult.put("latitude", firstPlace.get("y"));
-                processedResult.put("longitude", firstPlace.get("x"));
-                processedResult.put("category", firstPlace.get("category_name"));
-                processedResult.put("phone", firstPlace.get("phone"));
+                        processedResult.put("status", "SUCCESS");
+                        processedResult.put("name", firstPlace.get("place_name"));
+                        processedResult.put("address", firstPlace.get("address_name"));
+                        processedResult.put("roadAddress", firstPlace.get("road_address_name"));
+                        processedResult.put("latitude", firstPlace.get("y"));
+                        processedResult.put("longitude", firstPlace.get("x"));
+                        processedResult.put("category", firstPlace.get("category_name"));
+                        processedResult.put("phone", firstPlace.get("phone"));
+                    } else {
+                        processedResult.put("status", "ERROR");
+                        processedResult.put("message", "검색 결과의 형식이 올바르지 않습니다.");
+                    }
+                } else {
+                    processedResult.put("status", "NO_RESULTS");
+                    processedResult.put("message", "검색 결과가 없습니다.");
+                }
             } else {
                 processedResult.put("status", "NO_RESULTS");
                 processedResult.put("message", "검색 결과가 없습니다.");

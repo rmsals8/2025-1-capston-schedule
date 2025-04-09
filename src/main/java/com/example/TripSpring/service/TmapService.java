@@ -2,6 +2,9 @@ package com.example.TripSpring.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -19,52 +22,54 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TmapService {
    private final RestTemplate restTemplate;
-   private final String apiKey = "7wmYfg7J8X9vVj47sdQO23SZghqYIRFs6OtZOvH9";
+
+   @Value("${SK_API}")
+   private final String apiKey;
    private final String baseUrl = "https://apis.openapi.sk.com";
-   public Map<String, Object> getDetailedRoute(
+public Map<String, Object> getDetailedRoute(
     double startLat, double startLon, 
     double endLat, double endLon,
     String mode) {
-try {
-    String url;
-    if ("WALK".equals(mode)) {
-        url = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1";
-    } else {
-        url = "https://apis.openapi.sk.com/tmap/routes?version=1";
+    try {
+        String url;
+        if ("WALK".equals(mode)) {
+            url = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1";
+        } else {
+            url = "https://apis.openapi.sk.com/tmap/routes?version=1";
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("appKey", apiKey);
+
+        // T-map API 필수 파라미터 추가
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("startX", String.format("%.7f", startLon));
+        requestBody.put("startY", String.format("%.7f", startLat));
+        requestBody.put("endX", String.format("%.7f", endLon));
+        requestBody.put("endY", String.format("%.7f", endLat));
+        requestBody.put("reqCoordType", "WGS84GEO");
+        requestBody.put("resCoordType", "WGS84GEO");
+        requestBody.put("startName", URLEncoder.encode("출발지", "UTF-8"));
+        requestBody.put("endName", URLEncoder.encode("도착지", "UTF-8"));
+
+        // 자동차 경로일 경우 추가 파라미터
+        if (!"WALK".equals(mode)) {
+            requestBody.put("searchOption", "0");  // 최적 경로
+        }
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+            url,
+            HttpMethod.POST,
+            entity,
+            new ParameterizedTypeReference<Map<String, Object>>() {}
+        );
+        return response.getBody();
+    } catch (Exception e) {
+        log.error("T-map API error: {}", e.getMessage());
+        throw new RuntimeException("Failed to get route from T-map API", e);
     }
-
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    headers.set("appKey", apiKey);
-
-    // T-map API 필수 파라미터 추가
-    Map<String, Object> requestBody = new HashMap<>();
-    requestBody.put("startX", String.format("%.7f", startLon));
-    requestBody.put("startY", String.format("%.7f", startLat));
-    requestBody.put("endX", String.format("%.7f", endLon));
-    requestBody.put("endY", String.format("%.7f", endLat));
-    requestBody.put("reqCoordType", "WGS84GEO");
-    requestBody.put("resCoordType", "WGS84GEO");
-    requestBody.put("startName", URLEncoder.encode("출발지", "UTF-8"));
-    requestBody.put("endName", URLEncoder.encode("도착지", "UTF-8"));
-
-    // 자동차 경로일 경우 추가 파라미터
-    if (!"WALK".equals(mode)) {
-        requestBody.put("searchOption", "0");  // 최적 경로
-    }
-
-    HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-    ResponseEntity<Map> response = restTemplate.exchange(
-        url,
-        HttpMethod.POST,
-        entity,
-        Map.class
-    );
-    return response.getBody();
-} catch (Exception e) {
-    log.error("T-map API error: {}", e.getMessage());
-    throw new RuntimeException("Failed to get route from T-map API", e);
-}
 }
   
 

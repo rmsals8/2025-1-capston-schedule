@@ -101,7 +101,6 @@ public class NavigationController {
             throw new NavigationException("Failed to stop navigation: " + e.getMessage());
         }
     }
-
     @GetMapping("/routes")
     public ResponseEntity<RouteOptionsResponse> getRoutes(
         @RequestParam double startLat,
@@ -120,8 +119,29 @@ public class NavigationController {
     
             // 도보 경로 추가
             if (walkingRoute.containsKey("totalDistance")) {
-                double walkDistance = (double) walkingRoute.get("totalDistance");
-                int walkTime = (int) walkingRoute.get("totalTime");
+                double walkDistance = convertToDouble(walkingRoute.get("totalDistance"));
+                int walkTime = convertToInt(walkingRoute.get("totalTime"));
+                
+                // Type-safe handling of turnByTurn list
+                List<RouteStep> walkSteps = new ArrayList<>();
+                if (walkingRoute.containsKey("turnByTurn")) {
+                    Object turnByTurnObj = walkingRoute.get("turnByTurn");
+                    if (turnByTurnObj instanceof List<?>) {
+                        List<?> turnByTurnList = (List<?>) turnByTurnObj;
+                        for (Object stepObj : turnByTurnList) {
+                            if (stepObj instanceof Map) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> stepMap = (Map<String, Object>) stepObj;
+                                RouteStep step = RouteStep.builder()
+                                    .type(String.valueOf(stepMap.getOrDefault("type", "")))
+                                    .instruction(String.valueOf(stepMap.getOrDefault("instruction", "")))
+                                    .duration(convertToInt(stepMap.getOrDefault("duration", 0)))
+                                    .build();
+                                walkSteps.add(step);
+                            }
+                        }
+                    }
+                }
                 
                 segments.add(RouteSegment.builder()
                     .fromLocation("출발지")
@@ -135,7 +155,7 @@ public class NavigationController {
                                     .duration(walkTime)
                                     .distance(walkDistance / 1000.0) // m -> km
                                     .cost(0.0)
-                                    .steps((List<RouteStep>) walkingRoute.get("turnByTurn"))
+                                    .steps(walkSteps)
                                     .crowdedness("LOW")
                                     .build()
                             ))
@@ -146,9 +166,43 @@ public class NavigationController {
     
             // 택시 경로 추가
             if (drivingRoute.containsKey("totalDistance")) {
-                double driveDistance = (double) drivingRoute.get("totalDistance");
-                int driveTime = (int) drivingRoute.get("totalTime");
+                double driveDistance = convertToDouble(drivingRoute.get("totalDistance"));
+                int driveTime = convertToInt(drivingRoute.get("totalTime"));
                 double taxiFare = calculateTaxiFare(driveDistance / 1000.0); // m -> km
+                
+                // Type-safe handling of turnByTurn list
+                List<RouteStep> driveSteps = new ArrayList<>();
+                if (drivingRoute.containsKey("turnByTurn")) {
+                    Object turnByTurnObj = drivingRoute.get("turnByTurn");
+                    if (turnByTurnObj instanceof List<?>) {
+                        List<?> turnByTurnList = (List<?>) turnByTurnObj;
+                        for (Object stepObj : turnByTurnList) {
+                            if (stepObj instanceof Map) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> stepMap = (Map<String, Object>) stepObj;
+                                RouteStep step = RouteStep.builder()
+                                    .type(String.valueOf(stepMap.getOrDefault("type", "")))
+                                    .instruction(String.valueOf(stepMap.getOrDefault("instruction", "")))
+                                    .duration(convertToInt(stepMap.getOrDefault("duration", 0)))
+                                    .build();
+                                driveSteps.add(step);
+                            }
+                        }
+                    }
+                }
+                
+                // Get traffic status safely
+                String crowdedness = "MODERATE";
+                if (drivingRoute.containsKey("trafficInfo")) {
+                    Object trafficInfoObj = drivingRoute.get("trafficInfo");
+                    if (trafficInfoObj instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> trafficInfoMap = (Map<String, Object>) trafficInfoObj;
+                        if (trafficInfoMap.containsKey("status")) {
+                            crowdedness = String.valueOf(trafficInfoMap.get("status"));
+                        }
+                    }
+                }
                 
                 segments.add(RouteSegment.builder()
                     .fromLocation("출발지")
@@ -162,12 +216,8 @@ public class NavigationController {
                                     .duration(driveTime)
                                     .distance(driveDistance / 1000.0)
                                     .cost(taxiFare)
-                                    .steps((List<RouteStep>) drivingRoute.get("turnByTurn"))
-                                    .crowdedness(
-                                        drivingRoute.containsKey("trafficInfo") ? 
-                                        ((Map<String, Object>) drivingRoute.get("trafficInfo"))
-                                            .get("status").toString() : "MODERATE"
-                                    )
+                                    .steps(driveSteps)
+                                    .crowdedness(crowdedness)
                                     .build()
                             ))
                             .build()
@@ -194,6 +244,20 @@ public class NavigationController {
         }
     }
     
+    // Helper methods for safe type conversion
+    private double convertToDouble(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return 0.0;
+    }
+    
+    private int convertToInt(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return 0;
+    }
  
  
 

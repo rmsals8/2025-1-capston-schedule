@@ -2,6 +2,9 @@ package com.example.TripSpring.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -20,8 +23,8 @@ public class NearbyPlaceService {
     
     private final RestTemplate restTemplate;
     
-
-    private String kakaoApiKey ="357d3401893dc5c9cbefc83bb65df4ee";
+    @Value("${app.api.kakao}")
+    private String kakaoApiKey;
     
     private static final String KAKAO_LOCAL_API_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
     
@@ -44,40 +47,40 @@ public class NearbyPlaceService {
             throw new PlaceSearchException("Failed to search nearby places: " + e.getMessage(), e);
         }
     }
-    private List<PlaceInfo> searchKakaoPlaces(double lat, double lon, String type, double radius) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "KakaoAK " + kakaoApiKey);
-            
-            String url = UriComponentsBuilder.fromHttpUrl(KAKAO_LOCAL_API_URL)
-                    .queryParam("query", type)
-                    .queryParam("y", lat)
-                    .queryParam("x", lon)
-                    .queryParam("radius", radius)
-                    .queryParam("size", 15)
-                    .build()
-                    .toUriString();
-            
-            log.debug("Kakao API request URL: {}", url);
-            
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    new HttpEntity<>(headers),
-                    Map.class
-            );
-            
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                return parseKakaoResponse(response.getBody(), type);
-            }
-            
-            return new ArrayList<>();
-        } catch (Exception e) {
-            log.error("Failed to call Kakao API", e);
-            return new ArrayList<>();
+private List<PlaceInfo> searchKakaoPlaces(double lat, double lon, String type, double radius) {
+    try {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "KakaoAK " + kakaoApiKey);
+        
+        String url = UriComponentsBuilder.fromHttpUrl(KAKAO_LOCAL_API_URL)
+                .queryParam("query", type)
+                .queryParam("y", lat)
+                .queryParam("x", lon)
+                .queryParam("radius", radius)
+                .queryParam("size", 15)
+                .build()
+                .toUriString();
+        
+        log.debug("Kakao API request URL: {}", url);
+        
+        // Use parameterized type for the response
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                new ParameterizedTypeReference<Map<String, Object>>() {}
+        );
+        
+        if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+            return parseKakaoResponse(response.getBody(), type);
         }
+        
+        return new ArrayList<>();
+    } catch (Exception e) {
+        log.error("Failed to call Kakao API", e);
+        return new ArrayList<>();
     }
-    
+}
     @SuppressWarnings("unchecked")
     private List<PlaceInfo> parseKakaoResponse(Map<String, Object> response, String type) {
         List<PlaceInfo> results = new ArrayList<>();

@@ -18,4 +18,12 @@ public enum PlaceCategory {
         this.name = name;
         this.subCategories = subCategories;
     }
+
+    public String getName() {
+        return name;
+    }
+    
+    public List<String> getSubCategories() {
+        return subCategories;
+    }
 }

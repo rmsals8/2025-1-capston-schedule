@@ -3,6 +3,7 @@ package com.example.TripSpring.service;
 
 import com.example.TripSpring.dto.domain.Location;
 import com.example.TripSpring.dto.traffic.TrafficStatus;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -64,7 +65,9 @@ public class RealTimeTrafficService {
     
     private TrafficStatus parseTrafficInfo(String trafficInfo) {
         try {
-            Map<String, Object> info = new ObjectMapper().readValue(trafficInfo, Map.class);
+            // Use parameterized type for Map
+            Map<String, Object> info = new ObjectMapper().readValue(trafficInfo, 
+                    new TypeReference<Map<String, Object>>() {});
             
             double congestion = extractCongestion(info);
             int speed = extractSpeed(info);
@@ -107,9 +110,19 @@ public class RealTimeTrafficService {
     private List<String> extractIncidents(Map<String, Object> info) {
         List<String> incidents = new ArrayList<>();
         if (info.containsKey("accidents")) {
-            List<Map<String, Object>> accidents = (List<Map<String, Object>>) info.get("accidents");
-            for (Map<String, Object> accident : accidents) {
-                incidents.add(accident.get("description").toString());
+            // Use type checking before casting
+            Object accidentsObj = info.get("accidents");
+            if (accidentsObj instanceof List<?>) {
+                List<?> accidentsList = (List<?>) accidentsObj;
+                for (Object accidentObj : accidentsList) {
+                    if (accidentObj instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> accident = (Map<String, Object>) accidentObj;
+                        if (accident.containsKey("description")) {
+                            incidents.add(String.valueOf(accident.get("description")));
+                        }
+                    }
+                }
             }
         }
         return incidents;
