@@ -24,7 +24,7 @@ public class TmapService {
    private final RestTemplate restTemplate;
 
    @Value("${SK_API}")
-   private final String apiKey;
+   private String apiKey;
    private final String baseUrl = "https://apis.openapi.sk.com";
 public Map<String, Object> getDetailedRoute(
     double startLat, double startLon, 
